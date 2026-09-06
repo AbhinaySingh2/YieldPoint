@@ -1,6 +1,6 @@
 """
 YieldPoint - Hands-Free Floor Technician Backend
-Runs the LiveKit WebRTC agent with Deepgram STT, Gemini LLM, and Rime TTS.
+Runs the LiveKit WebRTC agent with Deepgram STT, Groq Qwen LLM, and Rime TTS.
 """
 
 from __future__ import annotations
@@ -9,12 +9,13 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
 from dotenv import load_dotenv
 
-from livekit import agents
+from livekit import agents, rtc
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -25,7 +26,7 @@ from livekit.agents import (
     get_job_context,
 )
 
-from livekit.plugins import deepgram, google, rime, silero
+from livekit.plugins import deepgram, google, rime, silero, openai
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(name)-28s  %(levelname)s  %(message)s")
@@ -50,7 +51,7 @@ MACHINE_DB: dict[str, dict] = {
         "last_service":   "2026-07-10",
         "next_service":   "2026-09-01",           # overdue!
         "spindle_hours":  3_410,
-        "status":         "warning – tolerance drift detected",
+        "status":         "warning - tolerance drift detected",
     },
     "PRESS-801": {
         "machine":        "PRESS-801  (Schuler 800-ton)",
@@ -68,7 +69,7 @@ MACHINE_DB: dict[str, dict] = {
         "tolerance_bar":  5,
         "last_service":   "2026-05-15",
         "next_service":   "2026-08-15",
-        "status":         "critical \u2014 pressure drop detected",
+        "status":         "critical - pressure drop detected",
     },
     "CNC-4403": {
         "machine":        "CNC-4403  (Mazak Integrex)",
@@ -77,7 +78,7 @@ MACHINE_DB: dict[str, dict] = {
         "last_service":   "2026-09-01",
         "next_service":   "2026-12-01",
         "spindle_hours":  520,
-        "status":         "offline \u2014 undergoing scheduled maintenance",
+        "status":         "offline - undergoing scheduled maintenance",
     },
 }
 
@@ -86,7 +87,7 @@ MAINTENANCE_LOG: list[dict] = []
 
 
 # These are plain async functions decorated with @function_tool.
-# The AgentSession passes them to the LLM; Gemini decides when to call.
+# The AgentSession passes them to the LLM; the LLM decides when to call.
 
 @function_tool()
 async def check_spindle_tolerance(
@@ -176,15 +177,31 @@ async def list_maintenance_log(
 
 SYSTEM_PROMPT = """\
 You are YieldPoint, a hands-free floor-technician assistant deployed on a \
-manufacturing production line.
+manufacturing production line. You are the voice of a lightning-fast, highly \
+responsive AI voice assistant. You are engaging in a real-time, bidirectional \
+spoken conversation with a user over a voice pipeline.
+
+# OUTPUT FORMATTING FOR TEXT-TO-SPEECH (CRITICAL)
+Your responses will be read aloud immediately by a Text-to-Speech (TTS) engine \
+streaming word-by-word. You must strictly adhere to these formatting rules to \
+prevent audio artifacts, robotic phrasing, or pipeline latency:
+1. NO MARKDOWN: Never use asterisks, hashtags, emojis, text formatting, or markdown bullet points. Output raw, clean text only.
+2. SPEAK IN CLAUSES: Write using short, natural clauses separated by clear punctuation (commas, periods, question marks). This allows our downstream text chunker to send audio to the speaker instantly.
+3. NUMBERS AND SYMBOLS: Write out all numbers, symbols, abbreviations, and acronyms exactly as they should be spoken. 
+   - WRONG: "It costs $50 at 2 PM." or "The model is an 8B variant."
+   - RIGHT: "It costs fifty dollars at two P M." or "The model is an eight B variant."
+
+# CONVERSATIONAL STYLE & BREVITY
+1. BE ULTRA-CONCISE: Keep your responses to one or two short sentences maximum (under 25 words total per turn). Long-winded answers introduce latency and cause buffer bloat.
+2. SPOKEN TONE: Sound natural, warm, and helpful. Use common contractions (like "I'm", "don't", "you're") to make the TTS sound human-like.
+3. IMMEDIACY: Dive straight into the answer. Do not use filler introductions like "Sure, I can help with that!" or "As an AI..." Go directly to the point.
+
+# HANDLING USER INTERRUPTION & BARGE-IN
+Because this is a real-time pipeline, the user might interrupt you mid-sentence. 
+1. If the user shifts the topic abruptly or cuts you off, do not reference the interruption or apologize. Immediately pivot and answer their new query concisely.
+2. Keep your thoughts self-contained so that if you get cut off half-way through a sentence, the part you already spoke still makes logical sense.
 
 RULES FOR SPOKEN DELIVERY
-- Speak in short, clear sentences.  No markdown, no bullet lists, \
-no asterisks.  Operators hear you through ear protection.
-- Numbers: always say the unit.  "Five thousandths of a millimetre", \
-not "0.005 mm".
-- If the user interrupts, acknowledge it briefly and switch context \
-immediately.  Never repeat what was already spoken.
 - When reporting tolerances or pressures, lead with the verdict \
 (nominal / warning / critical) before the numbers.
 
@@ -197,9 +214,6 @@ AVAILABLE TOOLS
 
 Always confirm after logging: repeat the machine ID, event type, and \
 a one-sentence summary back to the operator.
-
-Keep every response under 40 words unless reading out a full spec \
-the operator requested.
 """
 
 
@@ -222,8 +236,16 @@ async def entrypoint(ctx: JobContext) -> None:
         ctx.job.enable_recording = False
     await ctx.connect()
 
+    # Wait for the first human participant to join
+    participant = await ctx.wait_for_participant()
+    logger.info("Operator joined: %s", participant.identity)
+
     stt_plugin = deepgram.STT(model="nova-2")
-    llm_plugin = google.LLM(model="gemini-3.5-flash-lite")
+    llm_plugin = openai.LLM(
+        model="openai/gpt-oss-20b",
+        base_url="https://api.groq.com/openai/v1",
+        api_key=os.environ.get("GROQ_API_KEY"),
+    )
     tts_plugin = rime.TTS(
         model="coda",
         speaker="celeste",
@@ -236,11 +258,10 @@ async def entrypoint(ctx: JobContext) -> None:
     )
 
     turn_options = TurnHandlingOptions(
-        endpointing={"min_delay": 0.2},
-        preemptive_generation={"enabled": True, "preemptive_tts": True}
+        endpointing={"min_delay": 0.2, "max_delay": 0.3},
+        preemptive_generation={"enabled": True, "preemptive_tts": True},
     )
 
-    
     session = AgentSession(
         stt=stt_plugin,
         llm=llm_plugin,
@@ -249,22 +270,11 @@ async def entrypoint(ctx: JobContext) -> None:
         turn_handling=turn_options,
     )
 
-    # These hooks let us log exactly when an interruption happens,
-    # which is essential for the hackathon evidence document.
-    #
-
     @session.on("agent_speech_interrupted")
     def _on_interrupted(ev) -> None:
-        """
-        Fires when the framework detects a user barge-in and
-        flushes the Rime TTS buffer + cancels Gemini generation.
-
-        §  INTERRUPTION & RECOVERY — this is the core evidence
-           that the hard-voice problem is solved.
-        """
         logger.warning(
             "[INTERRUPTED] "
-            "Rime TTS buffer flushed, Gemini generation cancelled. "
+            "Rime TTS buffer flushed, generation cancelled. "
             "Context trimmed to last-heard boundary."
         )
 
@@ -274,11 +284,30 @@ async def entrypoint(ctx: JobContext) -> None:
 
     @session.on("user_input_transcribed")
     def _on_transcription(ev) -> None:
-        logger.info("[STT] %s", ev.transcript if hasattr(ev, "transcript") else ev)
-        # WORKAROUND: If VAD gets stuck due to Windows digital silence or high noise, 
-        # explicitly force a turn commit when the STT sends a final transcript.
-        if getattr(ev, "is_final", False):
-            session.commit_user_turn()
+        text = getattr(ev, 'transcript', getattr(ev, 'text', str(ev)))
+        is_final = getattr(ev, 'is_final', getattr(ev, 'final', False))
+        logger.info('[STT] final=%s %s', is_final, text)
+        seg_id = getattr(ev, 'item_id', None) or getattr(ev, 'id', None) or str(uuid.uuid4())
+        segment = rtc.TranscriptionSegment(
+            id=seg_id,
+            text=text,
+            start_time=0,
+            end_time=0,
+            language=getattr(ev, 'language', 'en') or 'en',
+            final=bool(is_final),
+        )
+        # Find participant's mic track SID
+        track_sid = ""
+        for pub in participant.track_publications.values():
+            if pub.source == rtc.TrackSource.SOURCE_MICROPHONE:
+                track_sid = pub.sid
+                break
+        t = rtc.Transcription(
+            participant_identity=participant.identity,
+            track_sid=track_sid,
+            segments=[segment],
+        )
+        asyncio.ensure_future(ctx.room.local_participant.publish_transcription(t))
 
     @session.on("function_calls_started")
     def _on_tool_start(ev) -> None:
@@ -288,13 +317,12 @@ async def entrypoint(ctx: JobContext) -> None:
     def _on_tool_done(ev) -> None:
         logger.info("[TOOL DONE] Tool execution completed.")
 
-    
     agent = FloorTechAgent()
 
     logger.info(
         "Starting YieldPoint Agent -- "
         "STT: Deepgram Nova-2 | "
-        "LLM: Gemini 2.0 Flash | "
+        "LLM: Groq GPT-OSS 20B | "
         "TTS: Rime Coda / celeste | "
         "Turn: Adaptive interruption detection"
     )
@@ -304,7 +332,8 @@ async def entrypoint(ctx: JobContext) -> None:
         agent=agent,
     )
 
-    
+
+
     await session.generate_reply(
         instructions=(
             "Greet the operator briefly.  Say: "
