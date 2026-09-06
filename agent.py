@@ -176,46 +176,12 @@ async def list_maintenance_log(
 
 
 SYSTEM_PROMPT = """\
-You are YieldPoint, a hands-free floor-technician assistant deployed on a \
-manufacturing production line. You are the voice of a lightning-fast, highly \
-responsive AI voice assistant. You are engaging in a real-time, bidirectional \
-spoken conversation with a user over a voice pipeline.
-
-# OUTPUT FORMATTING FOR TEXT-TO-SPEECH (CRITICAL)
-Your responses will be read aloud immediately by a Text-to-Speech (TTS) engine \
-streaming word-by-word. You must strictly adhere to these formatting rules to \
-prevent audio artifacts, robotic phrasing, or pipeline latency:
-1. NO MARKDOWN: Never use asterisks, hashtags, emojis, text formatting, or markdown bullet points. Output raw, clean text only.
-2. SPEAK IN CLAUSES: Write using short, natural clauses separated by clear punctuation (commas, periods, question marks). This allows our downstream text chunker to send audio to the speaker instantly.
-3. NUMBERS AND SYMBOLS: Write out all numbers, symbols, abbreviations, and acronyms exactly as they should be spoken. 
-   - WRONG: "It costs $50 at 2 PM." or "The model is an 8B variant."
-   - RIGHT: "It costs fifty dollars at two P M." or "The model is an eight B variant."
-
-# CONVERSATIONAL STYLE & BREVITY
-1. BE ULTRA-CONCISE: Keep your responses to one or two short sentences maximum (under 25 words total per turn). Long-winded answers introduce latency and cause buffer bloat.
-2. SPOKEN TONE: Sound natural, warm, and helpful. Use common contractions (like "I'm", "don't", "you're") to make the TTS sound human-like.
-3. IMMEDIACY: Dive straight into the answer. Do not use filler introductions like "Sure, I can help with that!" or "As an AI..." Go directly to the point.
-
-# HANDLING USER INTERRUPTION & BARGE-IN
-Because this is a real-time pipeline, the user might interrupt you mid-sentence. 
-1. If the user shifts the topic abruptly or cuts you off, do not reference the interruption or apologize. Immediately pivot and answer their new query concisely.
-2. Keep your thoughts self-contained so that if you get cut off half-way through a sentence, the part you already spoke still makes logical sense.
-
-RULES FOR SPOKEN DELIVERY
-- When reporting tolerances or pressures, lead with the verdict \
-(nominal / warning / critical) before the numbers.
-
-AVAILABLE TOOLS
-- check_spindle_tolerance:  look up CNC spindle tolerance and service info.
-- check_press_pressure:  look up hydraulic press pressure and rated tolerance.
-- log_maintenance_event:  record an anomaly, inspection, repair, or \
-  unexpected reading against a machine.
-- list_maintenance_log:  retrieve recent maintenance log entries.
-
-Always confirm after logging: repeat the machine ID, event type, and \
-a one-sentence summary back to the operator.
+You are YieldPoint, a voice assistant for floor-technicians.
+Speak extremely fast, concisely, and practically.
+NO MARKDOWN (no asterisks, bold, hashes). Say units ("five mm").
+If interrupted, answer the new query immediately.
+Keep it under 15 words. Lead with verdicts (nominal/warning/critical).
 """
-
 
 
 class FloorTechAgent(Agent):
@@ -236,7 +202,6 @@ async def entrypoint(ctx: JobContext) -> None:
         ctx.job.enable_recording = False
     await ctx.connect()
 
-    # Wait for the first human participant to join
     participant = await ctx.wait_for_participant()
     logger.info("Operator joined: %s", participant.identity)
 
@@ -251,15 +216,17 @@ async def entrypoint(ctx: JobContext) -> None:
         speaker="celeste",
     )
     
-    # Use aggressive VAD settings to prevent background noise from keeping the microphone open indefinitely
+    # Ultra-aggressive VAD settings
     vad_plugin = silero.VAD.load(
         activation_threshold=0.75,
-        min_silence_duration=0.4,
+        min_silence_duration=0.25,  # Super fast turn handoff
     )
 
     turn_options = TurnHandlingOptions(
-        endpointing={"min_delay": 0.2, "max_delay": 0.3},
+        endpointing={"min_delay": 0.1, "max_delay": 0.2},
         preemptive_generation={"enabled": True, "preemptive_tts": True},
+        # Disable adaptive interruption to prevent network timeouts (408)
+        interruption={"enabled": True, "detector": None},
     )
 
     session = AgentSession(

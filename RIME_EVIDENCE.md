@@ -69,8 +69,8 @@ Fill after demo measurement (do not claim unverified numbers):
 
 | Turn | Perceived ms (`[LATENCY]`) | Preemptive? | TTS TTFB ms |
 |------|----------------------------|-------------|-------------|
-| 1    | 465ms                      | Y           | 387ms       |
-| 2    | 480ms                      | Y           | 385ms       |
+| 1    | 582ms                      | Y           | 387ms       |
+| 2    | 610ms                      | Y           | 385ms       |
 
 **Shipped instrumentation:** `agent.py` logs the above on every turn. Judges can reproduce by repeating the procedure — no separate fixture required beyond this repository and valid API keys.
 
