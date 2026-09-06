@@ -1,0 +1,13 @@
+# LiveKit Agents Framework (v1.x)
+livekit-agents>=1.5.0
+livekit-plugins-rime>=0.5.0
+livekit-plugins-google>=1.5.0
+livekit-plugins-deepgram>=1.5.0
+livekit-plugins-silero>=1.5.0
+
+# Async utilities
+aiohttp>=3.9.0
+python-dotenv>=1.0.0
+
+# Google Generative AI (direct SDK — fallback / tooling)
+google-generativeai>=0.8.0
