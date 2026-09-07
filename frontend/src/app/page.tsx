@@ -14,7 +14,6 @@ import {
 import { Track, RoomEvent } from "livekit-client";
 import type { ReceivedTranscriptionSegment } from "@livekit/components-core";
 
-/* ── Static machine data (mirrors MACHINE_DB in agent.py) ── */
 const MACHINES = [
   { id: "CNC-4401", status: "nominal" },
   { id: "CNC-4402", status: "warning" },
@@ -112,7 +111,6 @@ export default function Home() {
   );
 }
 
-/* ── Agent Visualizer ──────────────────────────────── */
 function AgentVisualizer() {
   const { state, audioTrack } = useVoiceAssistant();
 
@@ -145,11 +143,9 @@ function AgentVisualizer() {
   );
 }
 
-/* ── Transcript Panel ──────────────────────────────── */
 
 interface DisplayMessage {
-  /** Unique key for React */
-  key: string;
+    key: string;
   role: "agent" | "user";
   text: string;
   isFinal: boolean;
@@ -269,7 +265,6 @@ function TranscriptPanel() {
   );
 }
 
-/* ── Machine Status Bar ────────────────────────────── */
 function MachineStatusBar() {
   return (
     <div className="machine-status-bar">

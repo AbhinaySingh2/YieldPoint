@@ -214,6 +214,7 @@ async def entrypoint(ctx: JobContext) -> None:
     tts_plugin = rime.TTS(
         model="coda",
         speaker="celeste",
+        reduce_latency=True,
     )
     
     # Ultra-aggressive VAD settings

@@ -1,7 +1,6 @@
 @import "@livekit/components-styles";
 @import "@livekit/components-styles/prefabs";
 
-/* ── Design Tokens ─────────────────────────────────── */
 :root {
   --bg-primary: #080a0f;
   --bg-secondary: #0e1117;
@@ -27,7 +26,6 @@
     Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* ── Reset & Base ──────────────────────────────────── */
 *,
 *::before,
 *::after {
@@ -35,7 +33,7 @@
 }
 
 body {
-  background: var(--bg-primary);
+  background: radial-gradient(circle at top left, #1a202c, #080a0f 80%);
   color: var(--foreground);
   font-family: var(--font-geist-sans);
   margin: 0;
@@ -47,7 +45,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Animated Background ───────────────────────────── */
 .app-container {
   position: relative;
   display: flex;
@@ -92,7 +89,6 @@ body {
   z-index: 1;
 }
 
-/* ── Header ────────────────────────────────────────── */
 .header {
   text-align: center;
   margin-bottom: 2.5rem;
@@ -129,7 +125,6 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* ── Connect Panel ─────────────────────────────────── */
 .connect-panel {
   background: var(--glass);
   border: 1px solid var(--glass-border);
@@ -161,7 +156,6 @@ body {
   margin-bottom: 2rem;
 }
 
-/* ── Connect Button ────────────────────────────────── */
 .connect-btn {
   position: relative;
   background: var(--accent);
@@ -215,7 +209,6 @@ body {
   font-weight: 500;
 }
 
-/* ── Active Room Layout ────────────────────────────── */
 .active-room {
   width: 100%;
   max-width: 900px;
@@ -233,7 +226,6 @@ body {
   padding: 0 0.5rem;
 }
 
-/* ── Disconnect Button ─────────────────────────────── */
 .disconnect-btn {
   display: inline-flex;
   align-items: center;
@@ -258,7 +250,6 @@ body {
   box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
 }
 
-/* ── Visualizer Container ──────────────────────────── */
 .visualizer-container {
   background: var(--glass);
   border: 1px solid var(--glass-border);
@@ -285,7 +276,6 @@ body {
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3), 0 0 40px rgba(34, 197, 94, 0.05);
 }
 
-/* ── Agent Visualizer Inner ────────────────────────── */
 .agent-visualizer {
   display: flex;
   flex-direction: column;
@@ -329,7 +319,6 @@ body {
   }
 }
 
-/* ── Transcript Panel ──────────────────────────────── */
 .transcript-panel {
   width: 100%;
   background: var(--glass);
@@ -442,7 +431,6 @@ body {
   font-style: italic;
 }
 
-/* ── Machine Status Footer ─────────────────────────── */
 .machine-status-bar {
   width: 100%;
   display: flex;
@@ -500,7 +488,6 @@ body {
   background: var(--offline);
 }
 
-/* ── LiveKit Control Bar Override ──────────────────── */
 .lk-control-bar {
   background: var(--glass) !important;
   border: 1px solid var(--glass-border) !important;
@@ -510,7 +497,6 @@ body {
   -webkit-backdrop-filter: blur(20px) !important;
 }
 
-/* ── Responsive ────────────────────────────────────── */
 @media (max-width: 640px) {
   .app-container {
     padding: 1.25rem;
