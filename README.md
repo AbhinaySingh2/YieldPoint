@@ -30,7 +30,7 @@ flowchart LR
     subgraph Backend["Python Agent"]
         STT["Deepgram Nova-2\n(STT)"]
         VAD["Silero VAD\n250ms silence"]
-        LLM["Groq 3.5 Flash Lite\n(LLM + Tool Calls)"]
+        LLM["Groq GPT-OSS-20B\n(LLM + Tool Calls)"]
         TTS["Rime Coda / Celeste\n(TTS)"]
         Tools["Machine DB\n& Maintenance Log"]
     end
@@ -51,7 +51,7 @@ flowchart LR
 ### Third-Party Services
 - **Voice Orchestration & Transport**: LiveKit (WebRTC)
 - **Speech-to-Text (STT)**: Deepgram (`nova-2`)
-- **Language Model (LLM)**: Google Groq (`gemini-3.7-flash`)
+- **Language Model (LLM)**: Groq (`openai/gpt-oss-20b`)
 - **Text-to-Speech (TTS)**: Rime (primary spoken output)
 
 ### Rime Integration Details
