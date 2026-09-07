@@ -26,7 +26,7 @@ from livekit.agents import (
     get_job_context,
 )
 
-from livekit.plugins import deepgram, google, rime, silero, openai
+from livekit.plugins import deepgram, rime, silero, openai
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(name)-28s  %(levelname)s  %(message)s")

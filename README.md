@@ -30,7 +30,7 @@ flowchart LR
     subgraph Backend["Python Agent"]
         STT["Deepgram Nova-2\n(STT)"]
         VAD["Silero VAD\n250ms silence"]
-        LLM["Gemini 3.5 Flash Lite\n(LLM + Tool Calls)"]
+        LLM["Groq 3.5 Flash Lite\n(LLM + Tool Calls)"]
         TTS["Rime Coda / Celeste\n(TTS)"]
         Tools["Machine DB\n& Maintenance Log"]
     end
@@ -51,7 +51,7 @@ flowchart LR
 ### Third-Party Services
 - **Voice Orchestration & Transport**: LiveKit (WebRTC)
 - **Speech-to-Text (STT)**: Deepgram (`nova-2`)
-- **Language Model (LLM)**: Google Gemini (`gemini-3.7-flash`)
+- **Language Model (LLM)**: Google Groq (`gemini-3.7-flash`)
 - **Text-to-Speech (TTS)**: Rime (primary spoken output)
 
 ### Rime Integration Details
@@ -73,7 +73,7 @@ Copy the `.env.example` file to create your local `.env` files.
 cp .env.example .env
 cp .env.example frontend/.env.local
 ```
-Fill in the placeholders with your actual LiveKit, Deepgram, Gemini, and Rime API keys. **Never commit live credentials.**
+Fill in the placeholders with your actual LiveKit, Deepgram, Groq, and Rime API keys. **Never commit live credentials.**
 
 Ensure `NEXT_PUBLIC_LIVEKIT_URL` is set in `frontend/.env.local` (same value as `LIVEKIT_URL`).
 
@@ -101,4 +101,4 @@ Open `http://localhost:3000` in your browser and click "Connect to Agent" to beg
 - **Noisy Environments**: Deepgram's `nova-2` model is highly resilient to background noise, but excessive industrial noise may stretch VAD silence past the 250ms floor and temporarily increase latency.
 - **Preemptive miss**: If the operator changes their request in the final moments of an utterance, preemptively synthesized audio is discarded and regenerates (higher latency).
 - **Database**: The application currently uses an in-memory mock dictionary (`MACHINE_DB`) for demonstration purposes. If the Python agent restarts, all dynamically logged maintenance events will reset.
-- **Dependencies**: If LiveKit, Deepgram, Gemini, or Rime is unavailable, the session fails visibly (connect error or agent error logs). There is no silent alternate TTS provider — Rime is the only spoken output path.
+- **Dependencies**: If LiveKit, Deepgram, Groq, or Rime is unavailable, the session fails visibly (connect error or agent error logs). There is no silent alternate TTS provider — Rime is the only spoken output path.
