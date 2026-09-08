@@ -1,104 +1,101 @@
 # YieldPoint
-**A Rime Hackathon Submission by Team Apex**
 
-YieldPoint is a voice-native intelligent assistant designed for manufacturing production floors. It allows operators and technicians to check machine specifications, retrieve maintenance schedules, and log safety/maintenance events entirely hands-free.
+A hands-free voice agent for shop-floor technicians. Ask it about machine
+status (CNC spindle tolerance, hydraulic press pressure) and log maintenance
+events, entirely by voice -- no screen, no keyboard, gloves stay on.
 
-## Voice Native Design
-A simple chatbot with a play button does not work on a noisy production floor where operators wear gloves and have their hands full of tools. Voice is absolutely essential to this experience.
+Built for the DataForge x Pathway x Rime hackathon. Rime provides all
+spoken output; see [RIME_EVIDENCE.md](./RIME_EVIDENCE.md) for the hard
+voice problem this project targets and how it's measured.
 
-### The Hard Voice Problem: Perceived Response Time
-We focused on reducing **Perceived Response Time**. By tuning Voice Activity Detection silence (`min_silence_duration: 0.25`, the LiveKit TurnDetector floor) with aggressive turn endpointing (`min_delay: 0.2`) and enabling **Preemptive TTS Generation** (speculative Rime synthesis), we mask TTS latency and target glass-to-glass response times at human-conversational levels (< 500ms). See `RIME_EVIDENCE.md` for acceptance criteria and how to read the agent latency logs.
+## Architecture
 
----
-
-## Technical Architecture
-
-The project is split into a robust Python backend agent and a sleek Next.js WebRTC frontend.
-
-- **Backend (Python)**: Uses the LiveKit Agents SDK. The agent is built on `AgentSession` and orchestrates STT, LLM function calling, and TTS generation. Explicit dispatch name: `floor-tech-local`.
-- **Frontend (Next.js)**: A React application utilizing `@livekit/components-react` to handle secure token generation (with `RoomAgentDispatch`), microphone access, and WebRTC streaming directly to the backend. Each Connect creates a unique room so dispatch always applies.
-
-```mermaid
-flowchart LR
-    Operator["🎤 Operator"]
-    subgraph Frontend["Next.js Frontend"]
-        UI["React UI + LiveKit SDK"]
-    end
-    subgraph Cloud["LiveKit Cloud"]
-        WebRTC["WebRTC Transport"]
-    end
-    subgraph Backend["Python Agent"]
-        STT["Deepgram Nova-2\n(STT)"]
-        VAD["Silero VAD\n250ms silence"]
-        LLM["Groq GPT-OSS-20B\n(LLM + Tool Calls)"]
-        TTS["Rime Coda / Celeste\n(TTS)"]
-        Tools["Machine DB\n& Maintenance Log"]
-    end
-
-    Operator -- "voice" --> UI
-    UI -- "audio stream" --> WebRTC
-    WebRTC -- "audio frames" --> STT
-    STT -- "transcript" --> VAD
-    VAD -- "committed turn" --> LLM
-    LLM -- "function calls" --> Tools
-    Tools -- "results" --> LLM
-    LLM -- "response text" --> TTS
-    TTS -- "audio stream" --> WebRTC
-    WebRTC -- "playback" --> UI
-    UI -- "speaker" --> Operator
+```
+Operator mic  --STT-->  Deepgram (nova-3)
+                            |
+                       LiveKit Agents (turn handling, tool orchestration)
+                            |
+                          LLM  -->  Groq (qwen/qwen3.8-27b)
+                            |
+                          TTS  -->  Rime (coda / cove)  --> Operator speaker
 ```
 
-### Third-Party Services
-- **Voice Orchestration & Transport**: LiveKit (WebRTC)
-- **Speech-to-Text (STT)**: Deepgram (`nova-2`)
-- **Language Model (LLM)**: Groq (`openai/gpt-oss-20b`)
-- **Text-to-Speech (TTS)**: Rime (primary spoken output)
+- **Transport / orchestration**: LiveKit Agents (`livekit-agents` 1.8.0),
+  connected to a LiveKit Cloud room.
+- **STT**: Deepgram `nova-3`, with a domain keyterm list (`spindle`,
+  `tolerance`, machine IDs, etc.) to improve recognition of shop-floor
+  vocabulary.
+- **LLM**: `qwen/qwen3.8-27b` served through Groq's OpenAI-compatible
+  endpoint (`https://api.groq.com/openai/v1`).
+- **TTS**: Rime, model `mistv3` (env-overridable via `RIME_MODEL`, e.g. set
+  to `coda` to A/B against the flagship model), speaker `cove`. Swapped
+  from Coda to Mist v3 specifically to hit a sub-1000ms perceived-response-
+  time target -- see [RIME_EVIDENCE.md](./RIME_EVIDENCE.md) for the
+  measured trade-off against Coda's higher quality.- **VAD**: Silero.
+- **Turn handling**: `TurnHandlingOptions` with `endpointing.min_delay=0.5s`
+  / `max_delay=0.8s`, preemptive generation enabled. See
+  [RIME_EVIDENCE.md](./RIME_EVIDENCE.md) for why `min_delay` is 0.5s and
+  not the library default of 0.1s.
 
-### Rime Integration Details
-- **Model ID**: `coda`
-- **Speaker**: `celeste`
-- **Language**: English (`eng`)
-- **Endpoint**: LiveKit native Rime plugin (`livekit.plugins.rime`), credentials via `RIME_API_KEY`
-- **Audio Format**: PCM @ 22050 Hz (`sample_rate=22050`), streamed over WebRTC
-- **Transport**: WebRTC (LiveKit)
-- **Latency tuning**: `reduce_latency=True`, preemptive TTS enabled
+## Setup
 
----
-
-## Setup Instructions
-
-### 1. Configuration Hygiene
-Copy the `.env.example` file to create your local `.env` files.
-```bash
-cp .env.example .env
-cp .env.example frontend/.env.local
 ```
-Fill in the placeholders with your actual LiveKit, Deepgram, Groq, and Rime API keys. **Never commit live credentials.**
-
-Ensure `NEXT_PUBLIC_LIVEKIT_URL` is set in `frontend/.env.local` (same value as `LIVEKIT_URL`).
-
-### 2. Run the Backend Agent
-Ensure you have Python 3.12+ installed.
-```bash
 pip install -r requirements.txt
+cp .env.example .env
+# fill in .env with real credentials -- never commit .env itself
 python agent.py dev
 ```
-The worker registers as `floor-tech-local` and waits for explicit room dispatch.
 
-### 3. Run the Frontend UI
-In a separate terminal, start the Next.js server.
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Open `http://localhost:3000` in your browser and click "Connect to Agent" to begin speaking.
+Required environment variables (see `.env.example`):
 
----
+| Variable | Used for |
+|---|---|
+| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | LiveKit room connection |
+| `DEEPGRAM_API_KEY` | Speech-to-text |
+| `GROQ_API_KEY` | LLM inference |
+| `RIME_API_KEY` | Text-to-speech (primary spoken output) |
 
-## Known Limitations & Failure Behavior
-- **Interruptions**: Barge-in flushes the Rime audio buffer and cancels generation. If the operator is still speaking when tools finish, YieldPoint cancels the automatic tool reply so stale results are not spoken. Tool side-effects already applied to the in-memory log are not rolled back.
-- **Noisy Environments**: Deepgram's `nova-2` model is highly resilient to background noise, but excessive industrial noise may stretch VAD silence past the 250ms floor and temporarily increase latency.
-- **Preemptive miss**: If the operator changes their request in the final moments of an utterance, preemptively synthesized audio is discarded and regenerates (higher latency).
-- **Database**: The application currently uses an in-memory mock dictionary (`MACHINE_DB`) for demonstration purposes. If the Python agent restarts, all dynamically logged maintenance events will reset.
-- **Dependencies**: If LiveKit, Deepgram, Groq, or Rime is unavailable, the session fails visibly (connect error or agent error logs). There is no silent alternate TTS provider — Rime is the only spoken output path.
+## Third-party services
+
+- LiveKit Cloud (room/transport)
+- Deepgram (STT)
+- Groq (LLM hosting)
+- Rime (TTS -- primary spoken output for this project)
+
+## Known limitations
+
+- TTS synthesis time (Rime `coda`) is the dominant remaining latency cost,
+  roughly 2.5-3.5s for short replies in development testing. `coda` is
+  tuned for voice quality over minimum latency; see RIME_EVIDENCE.md for
+  the tradeoff against faster Rime models.
+- No fallback TTS/STT/LLM provider is configured. If Groq, Deepgram, or
+  Rime is unreachable, the relevant pipeline stage will raise rather than
+  degrade gracefully. Per the hackathon's fallback-disclosure rule: **there
+  is no fallback path in this submission** -- Rime is the only speech
+  provider used, always.
+- The adaptive interruption detector (LiveKit Cloud) can time out (~0.7s)
+  under load and fall back to VAD-based interruption; this is graceful
+  degradation, not a crash, but interruption precision can vary between
+  turns as a result.
+- STT accuracy on heavy background/shop noise beyond what was tested here
+  is unverified; the keyterm list improves recognition of domain
+  vocabulary but doesn't eliminate mishears entirely.
+- `MACHINE_DB` and `MAINTENANCE_LOG` are in-memory, synthetic fixture data
+  for the demo -- no real machine telemetry or persistent storage.
+
+## Failure behavior
+
+- Unknown machine ID -> tool returns a JSON `{"error": ...}` payload, which
+  the LLM is expected to relay back to the technician in the "under 15
+  words, no markdown" house style rather than crashing.
+- STT/LLM/TTS API errors currently propagate as exceptions (see "no
+  fallback" above) -- not yet caught and converted into a spoken "system
+  unavailable" message. This is the clearest next-step improvement.
+
+## Exact Rime configuration
+
+- Model: `mistv3` (set `RIME_MODEL=coda` to run the flagship model instead)
+- Speaker: `cove`
+- Language: `en`
+- Audio format / sample rate / transport: Managed automatically by LiveKit Agents.
+- Endpoint / region: default

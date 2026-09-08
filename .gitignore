@@ -1,20 +1,7 @@
-# Credentials — NEVER commit
 .env
-
-# Python
 __pycache__/
 *.pyc
-*.pyo
-.venv/
-venv/
-env/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
+run.log
+user_run.log
+benchmark_results.json
 .DS_Store
-Thumbs.db
